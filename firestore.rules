@@ -1,0 +1,79 @@
+rules_version = '2';
+
+// =====================================================================
+// ReservaLab — regras de segurança do banco de dados (Cloud Firestore)
+// Cole este conteúdo em: Firebase > Firestore Database > aba "Regras"
+// e clique em "Publicar".
+// =====================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Está logado com uma conta Google?
+    function logado() {
+      return request.auth != null;
+    }
+
+    // Quem pode usar o sistema.
+    // Para liberar só e-mails da escola, apague a linha "return logado();"
+    // e tire as duas barras (//) da linha de baixo, trocando o domínio.
+    function podeUsar() {
+      return logado();
+      // return logado() && request.auth.token.email.matches('.*@prof[.]ce[.]gov[.]br');
+    }
+
+    // Coordenação: os mesmos e-mails do firebase-config.js, em minúsculas.
+    function isAdmin() {
+      return logado() && request.auth.token.email.lower() in [
+        'miguelnetoo76@gmail.com'
+      ];
+    }
+
+    // ---------------- RESERVAS ----------------
+    // O nome de cada reserva é recurso_data_aula (ex.: lab_2026-10-22_3).
+    // Como o banco não deixa criar dois documentos com o mesmo nome,
+    // é impossível existir duas reservas no mesmo horário.
+    match /reservas/{id} {
+      allow read: if podeUsar();
+
+      allow create: if podeUsar()
+        && id == request.resource.data.recurso + '_' + request.resource.data.data + '_' + string(request.resource.data.aula)
+        && request.resource.data.criadoPor == request.auth.uid
+        && request.resource.data.recurso in ['lab', 'datashow-1', 'datashow-2', 'inovacao', 'google']
+        && request.resource.data.aula is int
+        && request.resource.data.aula >= 1 && request.resource.data.aula <= 8
+        && request.resource.data.data is string
+        && request.resource.data.data.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.professor is string
+        && request.resource.data.professor.size() > 0
+        && request.resource.data.professor.size() <= 80
+        && (request.resource.data.tipo == 'aula'
+            || (request.resource.data.tipo == 'bloqueio' && isAdmin()));
+
+      // Reserva não se edita: cancela e faz outra.
+      allow update: if false;
+
+      // Só quem fez a reserva ou a coordenação pode cancelar.
+      allow delete: if podeUsar()
+        && (resource.data.criadoPor == request.auth.uid || isAdmin());
+    }
+
+    // ---------------- OCORRÊNCIAS ----------------
+    match /ocorrencias/{id} {
+      allow read: if podeUsar();
+
+      allow create: if podeUsar()
+        && request.resource.data.criadoPor == request.auth.uid
+        && request.resource.data.descricao is string
+        && request.resource.data.descricao.size() > 0
+        && request.resource.data.descricao.size() <= 500
+        && request.resource.data.resolvida == false;
+
+      // Qualquer usuário pode marcar como resolvida ou reabrir,
+      // mas não pode mudar o texto nem o autor.
+      allow update: if podeUsar()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolvida', 'resolvidaEm']);
+
+      allow delete: if isAdmin();
+    }
+  }
+}

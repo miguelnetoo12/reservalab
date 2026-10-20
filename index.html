@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ReservaLab</title>
+  <meta name="description" content="Agendamento de laboratório, data show e salas da escola.">
+  <!-- Fontes do Google -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500&display=swap">
+  <!-- Estilos do site -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">RL</div>
+      <div>
+        <h1>ReservaLab</h1>
+        <p>Agendamento de laboratório, data show e salas da escola</p>
+      </div>
+    </div>
+    <div class="status" id="status" data-s="loading"><i></i><span id="status-txt">Conectando…</span></div>
+    <div class="conta" id="conta" hidden>
+      <span class="ini" id="conta-ini" aria-hidden="true"></span>
+      <span class="nome" id="conta-nome"></span>
+      <span class="adm" id="conta-adm" hidden>Coordenação</span>
+      <button class="btn" data-act="sair">Sair</button>
+    </div>
+  </div>
+</header>
+
+<!-- Aparece quando o firebase-config.js ainda não foi preenchido -->
+<section class="wrap" id="tela-config" hidden>
+  <div class="gate">
+    <h2>Falta conectar o banco de dados</h2>
+    <p>O site ainda não sabe qual projeto do Firebase usar. Siga o guia do arquivo <code>README.md</code>:</p>
+    <ol>
+      <li>Crie um projeto no Firebase e ative o Firestore e o login com Google.</li>
+      <li>Copie a configuração do projeto para o arquivo <code>firebase-config.js</code>.</li>
+      <li>Envie o arquivo atualizado para o GitHub e recarregue esta página.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- Aparece para quem ainda não entrou -->
+<section class="wrap" id="tela-login" hidden>
+  <div class="gate">
+    <h2>Entre para ver a agenda</h2>
+    <p>Use sua conta Google para ver os horários livres e reservar o laboratório, os data shows e as salas.</p>
+    <button class="btn primary" data-act="entrar">
+      <svg class="g-logo" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.2C6.6 42.6 14.6 48 24 48z"/></svg>
+      Entrar com Google
+    </button>
+    <p class="erro" id="login-erro" hidden></p>
+  </div>
+</section>
+
+<!-- O sistema em si -->
+<main class="wrap" id="app" hidden>
+  <nav class="tabs" role="tablist" aria-label="Seções">
+    <button class="tab" role="tab" data-act="tab" data-v="agenda" aria-selected="true">Agenda</button>
+    <button class="tab" role="tab" data-act="tab" data-v="ocorrencias" aria-selected="false">Ocorrências<span class="count" id="oc-count">0</span></button>
+    <button class="tab" role="tab" data-act="tab" data-v="relatorio" aria-selected="false">Relatório da semana</button>
+  </nav>
+
+  <section class="view" id="view-agenda">
+    <div class="recursos" id="recursos" role="group" aria-label="Escolha o recurso"></div>
+    <div class="bar">
+      <div class="rec-info" id="rec-info"></div>
+      <div class="weeknav">
+        <button class="btn" data-act="semana" data-d="-1" aria-label="Semana anterior">‹</button>
+        <span class="lbl" id="semana-lbl"></span>
+        <button class="btn" data-act="semana" data-d="1" aria-label="Próxima semana">›</button>
+        <button class="btn" data-act="semana" data-d="0">Hoje</button>
+      </div>
+    </div>
+    <div class="dias" id="dias" role="group" aria-label="Dia da semana"></div>
+    <div class="grade-box">
+      <div class="grade" id="grade"></div>
+      <div class="lista" id="lista"></div>
+    </div>
+    <div class="legenda">
+      <span><i style="border:1px dashed var(--muted)"></i>Livre: toque para reservar</span>
+      <span><i id="leg-oc"></i>Reservado</span>
+      <span><i style="background:repeating-linear-gradient(135deg,var(--surface-2) 0 3px,transparent 3px 6px);border:1px solid var(--line)"></i>Bloqueado pela coordenação</span>
+      <span><i id="leg-mine" style="background:var(--surface)"></i>Reservado por você</span>
+    </div>
+  </section>
+
+  <section class="view" id="view-ocorrencias" hidden>
+    <div class="cols">
+      <form class="panel" id="form-oc" novalidate>
+        <h3>Relatar um problema</h3>
+        <p class="sub">Cabo faltando, computador sem ligar, projetor com defeito. A coordenação acompanha por aqui.</p>
+        <div class="field">
+          <label for="oc-recurso">Recurso</label>
+          <select id="oc-recurso"></select>
+        </div>
+        <div class="field">
+          <label for="oc-desc">O que aconteceu?</label>
+          <textarea id="oc-desc" placeholder="Ex.: Computador 14 não liga; Data Show sem cabo HDMI" maxlength="500"></textarea>
+        </div>
+        <p class="erro" id="oc-erro" hidden></p>
+        <button class="btn primary" type="submit" id="oc-enviar">Registrar ocorrência</button>
+      </form>
+      <div style="min-width:0;display:flex;flex-direction:column;gap:12px">
+        <div class="filtro" role="group" aria-label="Filtrar ocorrências">
+          <button class="chip" style="--c:var(--warn)" data-act="ocfiltro" data-f="aberta" aria-pressed="true">Abertas</button>
+          <button class="chip" style="--c:var(--ok)" data-act="ocfiltro" data-f="resolvida" aria-pressed="false">Resolvidas</button>
+          <button class="chip" style="--c:var(--ink)" data-act="ocfiltro" data-f="todas" aria-pressed="false">Todas</button>
+        </div>
+        <div class="oc-list" id="oc-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-relatorio" hidden>
+    <div class="bar">
+      <div class="rec-info">
+        <h2>Uso dos recursos</h2>
+        <p id="rel-sub"></p>
+      </div>
+      <div class="weeknav">
+        <button class="btn" data-act="semana" data-d="-1" aria-label="Semana anterior">‹</button>
+        <span class="lbl" id="semana-lbl2"></span>
+        <button class="btn" data-act="semana" data-d="1" aria-label="Próxima semana">›</button>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="two">
+      <div class="panel">
+        <div class="panel-head"><h3>Taxa de ocupação</h3></div>
+        <div class="ocup" id="ocup"></div>
+        <div class="scale" style="margin-top:8px"><span></span><span class="ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></span><span></span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Reservas por dia</h3></div>
+        <div class="dias-chart" id="dias-chart"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <div><h3>Todas as reservas da semana</h3><p class="sub" style="margin:2px 0 0">Para conferência da coordenação</p></div>
+        <button class="btn" data-act="csv">Baixar planilha (CSV)</button>
+      </div>
+      <div class="tbl-box" id="tabela"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg-reserva" aria-labelledby="dr-titulo">
+  <form id="form-reserva" novalidate>
+    <div class="dlg-head">
+      <div><h3 id="dr-titulo">Nova reserva</h3><p id="dr-sub"></p></div>
+      <button type="button" class="x" data-act="fechar" aria-label="Fechar">×</button>
+    </div>
+    <div class="dlg-body">
+      <label class="check" id="dr-bloq-wrap" hidden><input type="checkbox" id="dr-bloq"> <span>Bloquear este horário (prova, evento, manutenção)</span></label>
+      <div class="row2">
+        <div class="field"><label for="dr-prof">Professor(a)</label><input id="dr-prof" maxlength="80" autocomplete="name" placeholder="Ex.: Miguel"></div>
+        <div class="field"><label for="dr-turma">Turma</label><input id="dr-turma" maxlength="40" placeholder="Ex.: 2º ano B"></div>
+      </div>
+      <div class="field"><label for="dr-disc">Disciplina</label><input id="dr-disc" maxlength="60" placeholder="Ex.: Projeto Integrador"></div>
+      <div class="field"><label for="dr-fin">Atividade planejada</label><textarea id="dr-fin" maxlength="300" placeholder="Ex.: Pesquisa e montagem dos slides do PI"></textarea></div>
+      <div class="field"><label for="dr-rep">Repetir</label>
+        <select id="dr-rep">
+          <option value="1">Só nesta semana</option>
+          <option value="2">Por 2 semanas</option>
+          <option value="4">Por 4 semanas</option>
+          <option value="8">Por 8 semanas</option>
+        </select>
+        <span class="hint">Mesmo dia e mesma aula nas semanas seguintes. Horários já ocupados são pulados.</span>
+      </div>
+      <p class="erro" id="dr-erro" hidden></p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn" data-act="fechar">Cancelar</button>
+      <button type="submit" class="btn primary" id="dr-ok">Confirmar reserva</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-detalhe" aria-labelledby="dd-titulo">
+  <div class="dlg-head">
+    <div><h3 id="dd-titulo">Reserva</h3><p id="dd-sub"></p></div>
+    <button type="button" class="x" data-act="fechar" aria-label="Fechar">×</button>
+  </div>
+  <div class="dlg-body"><dl class="det" id="dd-det"></dl></div>
+  <div class="dlg-foot">
+    <button type="button" class="btn" data-act="fechar">Fechar</button>
+    <button type="button" class="btn danger" id="dd-cancel" data-act="cancelar">Cancelar reserva</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- Lógica do site (módulo JavaScript que conversa com o Firebase) -->
+<script type="module" src="script.js"></script>
+</body>
+</html>
